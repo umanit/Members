@@ -54,7 +54,7 @@
         "bolt-class": "Bolt\\Extension\\Bolt\\Members\\MembersExtension",
         "bolt-icon": "icon.png",
         "branch-alias": {
-            "dev-master": "3.0.x-dev"
+            "dev-old-dev": "old-dev"
         }
     }
 }
