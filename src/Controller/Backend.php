@@ -270,6 +270,9 @@ class Backend extends AbstractController
             $provider->setResourceOwnerId($account->getGuid());
             $provider->setLastupdate(Carbon::now());
             $app['members.records']->saveProvider($provider);
+            // Force update user to save password
+            $app['members.records.profile']->saveProfileForm($account, $form);
+
 
             return new RedirectResponse($app['url_generator']->generate('membersAdmin'));
         }
