@@ -15,6 +15,7 @@ use Bolt\Extension\DatabaseSchemaTrait;
 use Bolt\Extension\MenuTrait;
 use Bolt\Extension\StorageTrait;
 use Bolt\Extension\TwigTrait;
+use Bolt\Extension\TranslationTrait;
 use Bolt\Menu\MenuEntry;
 use Bolt\Translation\Translator as Trans;
 use Silex\Application;
@@ -39,6 +40,7 @@ class MembersExtension extends AbstractExtension implements ServiceProviderInter
     use MenuTrait;
     use StorageTrait;
     use TwigTrait;
+    use TranslationTrait;
 
     /**
      * {@inheritdoc}
@@ -49,6 +51,7 @@ class MembersExtension extends AbstractExtension implements ServiceProviderInter
         $this->extendTwigService();
         $this->extendDatabaseSchemaServices();
         $this->extendRepositoryMapping();
+        $this->extendTranslatorService();
     }
 
     /**

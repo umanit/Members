@@ -9,7 +9,7 @@
 {% endblock page_title %}
 
 {% block page_subtitle %}
-    Manage Site Membership Roles
+    {{ __('Manage Site Membership Roles') }}
 {% endblock page_subtitle %}
 
 {# clear default messages, because we use them in a different spot, in this template #}
@@ -47,7 +47,6 @@
                 </div>
 
                 <div class="members-list">
-
                     <table class="dashboardlisting table" id="members-table">
                         <colgroup>
                             <col class="members-column-check">
@@ -83,7 +82,7 @@
                                 <td class="members-email">{{ member.email }}</td>
                                 <td class="members-roles">
                                     {% for role in member.roles|default(['-']) %}
-                                        {{ role }}<br>
+                                        {{ __(role) }}<br>
                                     {% endfor %}
                                 </td>
                                 <td class="members-lastseen">
@@ -128,6 +127,15 @@
             boltExt.setMessage('userdisable', '{{__('Disabling user(s)...')}}');
             boltExt.setMessage('roleadd', '{{__('Adding role...')}}');
             boltExt.setMessage('roledel', '{{__('Removing role...')}}');
+            boltExt.setMessage('membernotsellHeader', '{{__('Nothing Selected!')}}');
+            boltExt.setMessage('membernotsell', '{{__('You need to choose a member.')}}');
+            boltExt.setMessage('rolenotsellHeader', '{{__('None role Selected!')}}');
+            boltExt.setMessage('rolenotsell', '{{__('You need to choose a role.')}}');
+            boltExt.setMessage('membererrorHeader', '{{__('Error!')}}');
+            boltExt.setMessage('membererror', '{{__('The server returned an error.')}}');
+            boltExt.setMessage('confirmdeleteHeader', '{{__('Confim deletion')}}');
+            boltExt.setMessage('confirmdelete', '{{__('Are you sure you want to delete these accounts?')}}');
+            boltExt.setMessage('confirmdeleteButton', '{{__('Yes!')}}');
         });
     </script>
 

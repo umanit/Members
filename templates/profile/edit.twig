@@ -14,7 +14,7 @@
 {% block members %}
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
     <div class="row">
-        <h4>Edit Profile</h4>
+        <h4>{{ __('Edit Profile') }}</h4>
     </div>
 
     {{ include(templates.feedback) }}
@@ -35,8 +35,7 @@
         </div>
 
         <div class="small-12 columns">
-            <h5>Registered Social Media Accounts</h5>
-
+            <h5>{{ __('Registered Accounts') }}</h5>
             <ul>
                 {%- for provider in member_providers() %}
                     <li><i class="fa fa-{{ provider }}">  {{ provider|title }}</i></li>
@@ -45,9 +44,6 @@
         </div>
 
         <div class="small-12 columns">
-            <h5>Add Social Media Account</h5>
-
-            {{ form_start(form_associate) }}
 
             {% for provider in providers|keys %}
                 {% if provider != 'local' %}
@@ -55,7 +51,6 @@
                 {% endif %}
             {% endfor %}
 
-            {{ form_end(form_associate) }}
         </div>
 
     </div>

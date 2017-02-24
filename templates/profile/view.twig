@@ -20,7 +20,7 @@
 {% block members %}
 
     <div class="row">
-        <h4>Member Profile — {{ member.displayname }}</h4>
+        <h4>{{ __('Member Profile') }} — {{ member.displayname }}</h4>
     </div>
 
     {{ include(templates.feedback) }}

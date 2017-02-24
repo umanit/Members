@@ -9,7 +9,7 @@
 {% endblock page_title %}
 
 {% block page_subtitle %}
-    Editing Membership Profile: {{ form_profile_edit.vars.value.displayname|default('New User') }}
+    {{ __('Editing Membership Profile') }}: {{ form_profile_edit.vars.value.displayname|default('New User') }}
 {% endblock page_subtitle %}
 
 {# clear default messages, because we use them in a different spot, in this template #}
@@ -18,7 +18,7 @@
 {% block page_main %}
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
     <div class="row">
-        <h4>Edit Existing Profile</h4>
+        <h4>{{ __('Edit Existing Profile') }}</h4>
     </div>
 
     <div class="row profile">
@@ -56,16 +56,17 @@
         <aside class="col-md-3">
             <div class="panel panel-default">
                 <div class="panel-heading">
-                    <i class="fa fa-cog fa-fw"></i> Actions
+                    <i class="fa fa-cog fa-fw"></i> {{ __('Actions') }}
                 </div>
 
                 <div class="panel-body">
                     {% include '@MembersAdmin/_aside-save.twig' %}
                 </div>
+
             </div>
 
             <div class="panel panel-default">
-                <div class="panel-heading"><i class="fa fa-cog fa-fw"></i>Linked Social Media Accounts</div>
+                <div class="panel-heading"><i class="fa fa-cog fa-fw"></i>{{ __('Linked Social Media Accounts') }}</div>
 
                 <div class="panel-body">
                     {% for provider in member_providers(guid) %}
