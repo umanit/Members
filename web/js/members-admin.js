@@ -47,6 +47,9 @@ var MembersAdmin = Object.extend(
             this.messages[key] = value;
         },
 
+        getMessage: function(key) {
+            return this.messages[key];
+        },
 
         setPath: function(key, value) {
             this.paths[key] = value;
@@ -67,7 +70,7 @@ var MembersAdmin = Object.extend(
                 )
                 .fail(
                     function() {
-                        swal({title: "Error!", text: "The server returned an error.", type: "error"});
+                        swal({title: this.getMessage('membererrorHeader'), text: this.getMessage('membererror'), type: "error"});
                     }
                 )
         },
@@ -83,19 +86,19 @@ var MembersAdmin = Object.extend(
             );
 
             if (selected_members.length === 0) {
-                swal({title: "Nothing Selected!", text: "You need to choose at least one member.", type: "warning"});
+                swal({title: this.getMessage('membernotsellHeader'), text: this.getMessage('membererror'), type: "warning"});
                 return;
             }
 
             console.debug("Deleting user(s): " + selected_members);
 
             swal({
-                title: "Confim deletion",
-                text: "Are you sure you want to delete these accounts?",
+                title: this.getMessage('confirmdeleteHeader'),
+                text: this.getMessage('confirmdelete'),
                 type: "warning",
                 showCancelButton: true,
                 confirmButtonColor: "#DD6B55",
-                confirmButtonText: "Yes!",
+                confirmButtonText: this.getMessage('confirmdeleteButton'),
                 closeOnConfirm: false },
                 function(){
                     $.post(baseurl + '/userDelete', {members: selected_members}, function(selected_members) {})
@@ -106,7 +109,7 @@ var MembersAdmin = Object.extend(
                         )
                         .fail(
                             function() {
-                                swal({title: "Error!", text: "The server returned an error.", type: "error"});
+                                swal({title: this.getMessage('membererrorHeader'), text: this.getMessage('membererror'), type: "error"});
                             }
                         )
                 }
@@ -124,7 +127,7 @@ var MembersAdmin = Object.extend(
             );
 
             if (selected_members.length === 0) {
-                swal({title: "Nothing Selected!", text: "You need to choose a member.", type: "warning"});
+                swal({title: this.getMessage('membernotsellHeader'), text: this.getMessage('membernotsell'), type: "warning"});
                 return;
             }
 
@@ -138,7 +141,7 @@ var MembersAdmin = Object.extend(
                 )
                 .fail(
                     function() {
-                        swal({title: "Error!", text: "The server returned an error.", type: "error"});
+                        swal({title: this.getMessage('membererrorHeader'), text: this.getMessage('membererror'), type: "error"});
                     }
                 )
         },
@@ -154,7 +157,7 @@ var MembersAdmin = Object.extend(
             );
 
             if (selected_members == '') {
-                swal({title: "Nothing Selected!", text: "You need to choose a member.", type: "warning"});
+                swal({title: this.getMessage('membernotsellHeader'), text: this.getMessage('membernotsell'), type: "warning"});
                 return;
             }
 
@@ -168,7 +171,7 @@ var MembersAdmin = Object.extend(
                 )
                 .fail(
                     function() {
-                        swal({title: "Error!", text: "The server returned an error.", type: "error"});
+                        swal({title: this.getMessage('membererrorHeader'), text: this.getMessage('membererror'), type: "error"});
                     }
                 )
         },
@@ -185,12 +188,12 @@ var MembersAdmin = Object.extend(
             );
 
             if (selected_members == '') {
-                swal({title: "Nothing Selected!", text: "You need to choose a member.", type: "warning"});
+                swal({title: this.getMessage('membernotsellHeader'), text: this.getMessage('membernotsell'), type: "warning"});
                 return;
             }
 
             if (selected_role == '') {
-                swal({title: "Nothing Selected!", text: "You need to choose a role.", type: "warning"});
+                swal({title: this.getMessage('rolenotsellHeader'), text: this.getMessage('rolenotsell'), type: "warning"});
                 return;
             }
 
@@ -215,7 +218,7 @@ var MembersAdmin = Object.extend(
                 )
                 .fail(
                     function() {
-                        swal({title: "Error!", text: "The server returned an error.", type: "error"});
+                        swal({title: this.getMessage('membererrorHeader'), text: this.getMessage('membererror'), type: "error"});
                     }
                 )
         },
@@ -232,12 +235,12 @@ var MembersAdmin = Object.extend(
             );
 
             if (selected_members == '') {
-                swal({title: "Nothing Selected!", text: "You need to choose a member.", type: "warning"});
+                swal({title: this.getMessage('membernotsellHeader'), text: this.getMessage('membernotsell'), type: "warning"});
                 return;
             }
 
             if (selected_role == '') {
-                swal({title: "Nothing Selected!", text: "You need to choose a role.", type: "warning"});
+                swal({title: this.getMessage('membernotsellHeader'), text: this.getMessage('membernotsell'), type: "warning"});
                 return;
             }
 
@@ -262,7 +265,7 @@ var MembersAdmin = Object.extend(
                 )
                 .fail(
                     function() {
-                        swal({title: "Error!", text: "The server returned an error.", type: "error"});
+                        swal({title: this.getMessage('membererrorHeader'), text: this.getMessage('membererror'), type: "error"});
                     }
                 )
         },

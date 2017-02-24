@@ -14,7 +14,7 @@
 {% block members %}
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
     <div class="row">
-        <h4>Edit Profile</h4>
+        <h4>{{ __('Edit Profile') }}</h4>
     </div>
 
     {{ include(templates.feedback) }}
@@ -24,10 +24,9 @@
         <div class="small-12 columns">
 
             {{ form_start(form_profile_edit) }}
-                {{ form_row(form_profile_edit.displayname) }}
-                {{ form_row(form_profile_edit.email) }}
-                {{ form_row(form_profile_edit.password.first) }}
-                {{ form_row(form_profile_edit.password.second) }}
+                {% for name, row in form_profile_edit if name not in ['submit'] %}
+                    {{ form_row(row) }}
+                {% endfor %}
                 <br>
                 {{ form_row(form_profile_edit.submit, {'attr': {'class': 'button btn btn-default'}}) }}
             {{ form_end(form_profile_edit) }}
@@ -35,8 +34,7 @@
         </div>
 
         <div class="small-12 columns">
-            <h5>Registered Social Media Accounts</h5>
-
+            <h5>{{ __('Registered Accounts') }}</h5>
             <ul>
                 {%- for provider in member_providers() %}
                     <li><i class="fa fa-{{ provider }}">  {{ provider|title }}</i></li>
@@ -45,17 +43,16 @@
         </div>
 
         <div class="small-12 columns">
-            <h5>Add Social Media Account</h5>
-
-            {{ form_start(form_associate) }}
 
             {% for provider in providers|keys %}
-                {% if provider != 'local' %}
-                    {{ form_row(form_associate[provider]) }}
+                {% if provider != 'local' and provider not in member_providers() %}
+                {% if loop.first %}<h5>{{ __('Add Social Media Account') }}</h5>{% endif %}
+                    {{ form_start(form_associate) }}
+                        {{ form_row(form_associate[provider]) }}
+                    {{ form_end(form_associate) }}
                 {% endif %}
             {% endfor %}
 
-            {{ form_end(form_associate) }}
         </div>
 
     </div>
