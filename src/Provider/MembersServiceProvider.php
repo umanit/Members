@@ -6,9 +6,9 @@ use Bolt\Extension\Bolt\Members\AccessControl;
 use Bolt\Extension\Bolt\Members\Admin;
 use Bolt\Extension\Bolt\Members\Config\Config;
 use Bolt\Extension\Bolt\Members\Controller;
-use Bolt\Extension\Bolt\Members\EventListener;
 use Bolt\Extension\Bolt\Members\Feedback;
 use Bolt\Extension\Bolt\Members\Form;
+use Bolt\Extension\Bolt\Members\Handler as EventHandler;
 use Bolt\Extension\Bolt\Members\Oauth2\Client\Provider;
 use Bolt\Extension\Bolt\Members\Oauth2\Client\ProviderManager;
 use Bolt\Extension\Bolt\Members\Oauth2\Handler;
@@ -59,7 +59,7 @@ class MembersServiceProvider implements ServiceProviderInterface, EventSubscribe
         $this->registerForms($app);
         $this->registerOauthHandlers($app);
         $this->registerOauthProviders($app);
-        $this->registerEventListeners($app);
+        $this->registerEventHandlers($app);
 
         /** @deprecated. Do not use */
         $app['members.meta_fields'] = [];
@@ -176,7 +176,7 @@ class MembersServiceProvider implements ServiceProviderInterface, EventSubscribe
 
         $app['members.session'] = $app->share(
             function ($app) {
-                return new AccessControl\Session($app['members.records'], $app['session'], $app['resources']->getUrl('root'));
+                return new AccessControl\Session($app['members.records'], $app['session'], $app['url_generator']->generate('homepage'));
             }
         );
 
@@ -225,19 +225,19 @@ class MembersServiceProvider implements ServiceProviderInterface, EventSubscribe
                 return new Container(
                     [
                         // @codingStandardsIgnoreStart
-                        'account'      => $app->share(function () use ($app) {
+                        'account' => $app->share(function () use ($app) {
                             return $app['storage']->getRepository(Entity\Account::class);
                         }),
                         'account_meta' => $app->share(function () use ($app) {
                             return $app['storage']->getRepository(Entity\AccountMeta::class);
                         }),
-                        'oauth'        => $app->share(function () use ($app) {
+                        'oauth' => $app->share(function () use ($app) {
                             return $app['storage']->getRepository(Entity\Oauth::class);
                         }),
-                        'provider'     => $app->share(function () use ($app) {
+                        'provider' => $app->share(function () use ($app) {
                             return $app['storage']->getRepository(Entity\Provider::class);
                         }),
-                        'token'        => $app->share(function () use ($app) {
+                        'token' => $app->share(function () use ($app) {
                             return $app['storage']->getRepository(Entity\Token::class);
                         }),
                         // @codingStandardsIgnoreEnd
@@ -274,27 +274,27 @@ class MembersServiceProvider implements ServiceProviderInterface, EventSubscribe
             function ($app) {
                 return new Container(
                     [
-                        'associate'                => $app->share(
+                        'associate' => $app->share(
                             function () use ($app) {
                                 return new Form\Type\AssociateType($app['members.config']);
                             }
                         ),
-                        'login_oauth'              => $app->share(
+                        'login_oauth' => $app->share(
                             function () use ($app) {
                                 return new Form\Type\LoginOauthType($app['members.config']);
                             }
                         ),
-                        'login_password'           => $app->share(
+                        'login_password' => $app->share(
                             function () use ($app) {
                                 return new Form\Type\LoginPasswordType($app['members.config']);
                             }
                         ),
-                        'logout'                   => $app->share(
+                        'logout' => $app->share(
                             function () use ($app) {
                                 return new Form\Type\LogoutType($app['members.config']);
                             }
                         ),
-                        'profile_edit'             => $app->share(
+                        'profile_edit' => $app->share(
                             function () use ($app) {
                                 return new Form\Type\ProfileEditType($app['members.config']);
                             }
@@ -304,12 +304,12 @@ class MembersServiceProvider implements ServiceProviderInterface, EventSubscribe
                                 return new Form\Type\ProfileRecoveryRequestType($app['members.config']);
                             }
                         ),
-                        'profile_recovery_submit'  => $app->share(
+                        'profile_recovery_submit' => $app->share(
                             function () use ($app) {
                                 return new Form\Type\ProfileRecoverySubmitType($app['members.config']);
                             }
                         ),
-                        'profile_register'         => $app->share(
+                        'profile_register' => $app->share(
                             function () use ($app) {
                                 return new Form\Type\ProfileRegisterType(
                                     $app['members.config'],
@@ -318,7 +318,7 @@ class MembersServiceProvider implements ServiceProviderInterface, EventSubscribe
                                 );
                             }
                         ),
-                        'profile_view'             => $app->share(
+                        'profile_view' => $app->share(
                             function () use ($app) {
                                 return new Form\Type\ProfileViewType($app['members.config']);
                             }
@@ -345,7 +345,8 @@ class MembersServiceProvider implements ServiceProviderInterface, EventSubscribe
                     $app['members.session'],
                     $app['members.feedback'],
                     $app['members.records'],
-                    $app['members.form.generator']
+                    $app['members.form.generator'],
+                    $app['url_generator']
                 );
             }
         );
@@ -381,9 +382,7 @@ class MembersServiceProvider implements ServiceProviderInterface, EventSubscribe
         // Provider manager
         $app['members.oauth.provider.manager'] = $app->share(
             function ($app) {
-                $rootUrl = $app['resources']->getUrl('hosturl');
-
-                return new ProviderManager($app['members.config'], $app['guzzle.client'], $app['logger.system'], $rootUrl);
+                return new ProviderManager($app['members.config'], $app['guzzle.client'], $app['logger.system'], $app['url_generator.lazy']);
             }
         );
 
@@ -397,13 +396,6 @@ class MembersServiceProvider implements ServiceProviderInterface, EventSubscribe
         $app['members.oauth.provider.name'] = $app->share(
             function () {
                 throw new \RuntimeException('Members authentication provider not set up!');
-            }
-        );
-
-        // Generic OAuth provider object
-        $app['members.oauth.provider.generic'] = $app->protect(
-            function () {
-                return new Provider\Generic([]);
             }
         );
 
@@ -428,28 +420,40 @@ class MembersServiceProvider implements ServiceProviderInterface, EventSubscribe
         $app['members.oauth.provider.map'] = $app->share(
             function () {
                 return [
-                    'facebook'  => '\Bolt\Extension\Bolt\Members\Oauth2\Client\Provider\Facebook',
-                    'generic'   => '\Bolt\Extension\Bolt\Members\Oauth2\Client\Provider\Generic',
-                    'github'    => '\Bolt\Extension\Bolt\Members\Oauth2\Client\Provider\GitHub',
-                    'google'    => '\Bolt\Extension\Bolt\Members\Oauth2\Client\Provider\Google',
-                    'instagram' => '\Bolt\Extension\Bolt\Members\Oauth2\Client\Provider\Instagram',
-                    'linkedin'  => '\Bolt\Extension\Bolt\Members\Oauth2\Client\Provider\LinkedIn',
-                    'local'     => '\Bolt\Extension\Bolt\Members\Oauth2\Client\Provider\Local',
-                    'microsoft' => '\Bolt\Extension\Bolt\Members\Oauth2\Client\Provider\Microsoft',
+                    'facebook'  => Provider\Facebook::class,
+                    'generic'   => Provider\Generic::class,
+                    'github'    => Provider\GitHub::class,
+                    'google'    => Provider\Google::class,
+                    'instagram' => Provider\Instagram::class,
+                    'linkedin'  => Provider\LinkedIn::class,
+                    'local'     => Provider\Local::class,
+                    'microsoft' => Provider\Microsoft::class,
+                    'wpoauth'   => Provider\WpOauth::class,
                 ];
             }
         );
     }
 
-    private function registerEventListeners(Application $app)
+    private function registerEventHandlers(Application $app)
     {
-        $app['members.listener.profile'] = $app->share(
+        $app['members.event_handler.profile_register'] = $app->share(
             function ($app) {
-                return new EventListener\ProfileListener(
+                return new EventHandler\ProfileRegister(
                     $app['members.config'],
                     $app['twig'],
                     $app['mailer'],
-                    $app['resources']->getUrl('hosturl')
+                    $app['url_generator.lazy']
+                );
+            }
+        );
+
+        $app['members.event_handler.profile_reset'] = $app->share(
+            function ($app) {
+                return new EventHandler\ProfileReset(
+                    $app['members.config'],
+                    $app['twig'],
+                    $app['mailer'],
+                    $app['url_generator.lazy']
                 );
             }
         );

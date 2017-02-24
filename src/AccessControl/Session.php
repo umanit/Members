@@ -7,10 +7,8 @@ use Bolt\Extension\Bolt\Members\Storage;
 use League\OAuth2\Client\Provider\AbstractProvider;
 use League\OAuth2\Client\Token\AccessToken;
 use Ramsey\Uuid\Uuid;
-use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Session\SessionInterface;
-use Symfony\Component\HttpKernel\KernelEvents;
 
 /**
  * Session state class.
@@ -21,13 +19,16 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * @copyright Copyright (c) 2014-2016, Gawain Lynch
  * @license   https://opensource.org/licenses/MIT MIT
  */
-class Session implements EventSubscriberInterface
+class Session
 {
     const COOKIE_AUTHORISATION = 'members';
+    const SESSION_ATTRIBUTES = 'members-session-attributes';
     const SESSION_AUTHORISATION = 'members-authorisation';
     const SESSION_STATE = 'members-oauth-state';
     const SESSION_TRANSITIONAL = 'members-transitional';
     const REDIRECT_STACK = 'members-redirect-stack';
+
+    const SESSION_ATTRIBUTE_OAUTH_DATA = 'members-oauth-finalise';
 
     /** @var Authorisation */
     protected $authorisation;
@@ -37,26 +38,28 @@ class Session implements EventSubscriberInterface
     protected $accessTokens;
     /** @var Storage\Entity\Provider */
     protected $transitionalProvider;
+    /** @var array */
+    protected $attribute;
 
     /** @var Storage\Records */
     private $records;
     /** @var SessionInterface */
     private $session;
     /** @var string */
-    private $rootUrl;
+    private $homepageUrl;
 
     /**
      * Constructor.
      *
      * @param Storage\Records  $records
      * @param SessionInterface $session
-     * @param string           $rootUrl
+     * @param string           $homepageUrl
      */
-    public function __construct(Storage\Records $records, SessionInterface $session, $rootUrl)
+    public function __construct(Storage\Records $records, SessionInterface $session, $homepageUrl)
     {
         $this->records = $records;
         $this->session = $session;
-        $this->rootUrl = $rootUrl;
+        $this->homepageUrl = $homepageUrl;
     }
 
     /**
@@ -277,22 +280,6 @@ class Session implements EventSubscriberInterface
     }
 
     /**
-     * {@inheritdoc}
-     */
-    public static function getSubscribedEvents()
-    {
-        return [
-            KernelEvents::RESPONSE => [
-                ['persistData'],
-                ['saveRedirects'],
-            ],
-            KernelEvents::REQUEST => [
-                ['loadRedirects'],
-            ],
-        ];
-    }
-
-    /**
      * Persist session data to storage.
      */
     public function persistData()
@@ -401,14 +388,14 @@ class Session implements EventSubscriberInterface
     public function popRedirect()
     {
         if (empty($this->redirectStack)) {
-            return new Redirect($this->rootUrl);
+            return new Redirect($this->homepageUrl);
         }
 
         $redirect = end($this->redirectStack);
         $key = key($this->redirectStack);
         unset($this->redirectStack[$key]);
         if (empty($this->redirectStack)) {
-            $redirect = new Redirect($this->rootUrl);
+            $redirect = new Redirect($this->homepageUrl);
             $this->redirectStack[] = $redirect;
         }
 
@@ -422,8 +409,7 @@ class Session implements EventSubscriberInterface
      */
     public function clearRedirects()
     {
-        $this->redirectStack = null;
-        $this->redirectStack[] = new Redirect('/');
+        $this->redirectStack = [new Redirect($this->homepageUrl)];
 
         return $this;
     }
@@ -444,8 +430,65 @@ class Session implements EventSubscriberInterface
     public function loadRedirects()
     {
         if ($this->session->isStarted()) {
-            $this->redirectStack = $this->session->get(self::REDIRECT_STACK, [new Redirect('/')]);
+            $this->redirectStack = $this->session->get(self::REDIRECT_STACK, [new Redirect($this->homepageUrl)]);
         }
+    }
+
+    /**
+     * @param string $attribute
+     *
+     * @return bool
+     */
+    public function hasAttribute($attribute)
+    {
+        $attributes = $this->session->get(self::SESSION_ATTRIBUTES);
+        if (!is_array($attributes)) {
+            return false;
+        }
+
+        return isset($attributes[$attribute]);
+    }
+
+    /**
+     * @param string $attribute
+     *
+     * @return array
+     */
+    public function getAttribute($attribute)
+    {
+        $attributes = (array) $this->session->get(self::SESSION_ATTRIBUTES);
+        if (!isset($attributes[$attribute])) {
+            throw new \RuntimeException(sprintf('Requested attribute "%s" does not exist'), $attribute);
+        }
+
+        $value = $attributes[$attribute];
+        $attributes = empty($attributes) ? null : $attributes;
+        $this->session->set(self::SESSION_ATTRIBUTES, $attributes);
+
+        return $value;
+    }
+
+    /**
+     * @param string $attribute
+     */
+    public function removeAttribute($attribute)
+    {
+        $attributes = (array) $this->session->get(self::SESSION_ATTRIBUTES);
+        unset($attributes[$attribute]);
+
+        $this->session->set(self::SESSION_ATTRIBUTES, $attributes);
+    }
+
+    /**
+     * @param string $attribute
+     * @param string $value
+     */
+    public function setAttribute($attribute, $value)
+    {
+        $attributes = (array) $this->session->get(self::SESSION_ATTRIBUTES);
+        $attributes[$attribute] = $value;
+
+        $this->session->set(self::SESSION_ATTRIBUTES, $attributes);
     }
 
     /**

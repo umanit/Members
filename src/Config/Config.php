@@ -35,6 +35,8 @@ class Config
     /** @var string */
     protected $notificationEmail;
     /** @var string */
+    protected $notificationEmailFormat;
+    /** @var string */
     protected $redirectLogin;
     /** @var string */
     protected $redirectLogout;
@@ -62,6 +64,7 @@ class Config
         $this->urlMembers = $config['urls']['members'];
         $this->notificationName = $config['notification']['name'];
         $this->notificationEmail = $config['notification']['email'];
+        $this->notificationEmailFormat = $config['notification']['format'];
         $this->redirectLogin = $config['redirects']['login'];
         $this->redirectLogout = $config['redirects']['logout'];
 
@@ -70,7 +73,6 @@ class Config
         foreach ($config['providers'] as $name => $provider) {
             $this->providers[strtolower($name)] = new Provider($name, $provider);
         }
-        $this->providers['generic'] = new Provider('Generic', []);
     }
 
     /**
@@ -94,12 +96,30 @@ class Config
     }
 
     /**
-     * @param $provider
+     * @param string $provider
+     *
+     * @return bool
+     */
+    public function hasProvider($provider)
+    {
+        if (isset($this->providers[$provider])) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * @param string $provider
      *
      * @return Provider
      */
     public function getProvider($provider)
     {
+        if (!isset($this->providers[$provider])) {
+            throw new \BadMethodCallException(sprintf('Provider "%s" does not exist in configuration!', $provider));
+        }
+
         return $this->providers[$provider];
     }
 
@@ -242,6 +262,14 @@ class Config
     }
 
     /**
+     * @return boolean
+     */
+    public function isRegistrationAutomatic()
+    {
+        return $this->registration['auto'];
+    }
+
+    /**
      * @return array
      */
     public function getRegistration()
@@ -377,6 +405,26 @@ class Config
     public function setNotificationEmail($notificationEmail)
     {
         $this->notificationEmail = $notificationEmail;
+
+        return $this;
+    }
+
+    /**
+     * @return string
+     */
+    public function getNotificationEmailFormat()
+    {
+        return $this->notificationEmailFormat;
+    }
+
+    /**
+     * @param string $notificationEmailFormat
+     *
+     * @return Config
+     */
+    public function setNotificationEmailFormat($notificationEmailFormat)
+    {
+        $this->notificationEmailFormat = $notificationEmailFormat;
 
         return $this;
     }
@@ -532,10 +580,12 @@ class Config
             'debug'        => false,
             'registration' => [
                 'enabled'      => true,
+                'auto'         => false,
             ],
             'notification' => [
-                'name'  => null,
-                'email' => null,
+                'name'   => null,
+                'email'  => null,
+                'format' => 'mixed',
             ],
             'redirects'    => [
                 'login'  => null,
@@ -582,11 +632,13 @@ class Config
                     ],
                     'recovery'   => [
                         'subject' => '@Members/authentication/recovery/subject.twig',
-                        'body'    => '@Members/authentication/recovery/body.twig',
+                        'html'    => '@Members/authentication/recovery/html.twig',
+                        'text'    => '@Members/authentication/recovery/text.twig',
                     ],
                     'verification'   => [
                         'subject' => '@Members/profile/registration/subject.twig',
-                        'body'    => '@Members/profile/registration/body.twig',
+                        'html'    => '@Members/profile/registration/html.twig',
+                        'text'    => '@Members/profile/registration/text.twig',
                     ],
                 ],
                 'labels'       => [

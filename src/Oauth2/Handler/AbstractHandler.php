@@ -60,9 +60,6 @@ abstract class AbstractHandler
     /** @var UrlGeneratorInterface */
     protected $urlGenerator;
 
-    /** @var Entity\Provider */
-    private $providerEntity;
-
     /**
      * Constructor.
      *
@@ -148,22 +145,15 @@ abstract class AbstractHandler
             throw new Ex\InvalidAuthorisationRequestException('No provider access code.');
         }
 
-        $options['code'] = $code;
         if ($this->session->hasAuthorisation()) {
-            $options['guid'] = $this->session->getAuthorisation()->getGuid();
-            $accessToken = $this->getAccessToken($grantType, $options);
-            $this->setSession($accessToken);
-
-            if ($this->session->isTransitional()) {
-                $this->handleAccountTransition($accessToken);
-            }
-        } else {
-            //either no Auth or more probably a disabled account... anyway we cant continue
-            $exceptionMsg = 'No valid authorisation, the account may be disabled';
-            $this->setDebugMessage($exceptionMsg);
-            $this->feedback->error($exceptionMsg);
-            throw new Ex\DisabledAccountException($exceptionMsg);
+            return;
         }
+
+        //either no Auth or more probably a disabled account... anyway we cant continue
+        $exceptionMsg = 'No valid authorisation, the account may be disabled';
+        $this->setDebugMessage($exceptionMsg);
+        $this->feedback->error($exceptionMsg);
+        throw new Ex\DisabledAccountException($exceptionMsg);
     }
 
     /**
@@ -174,7 +164,11 @@ abstract class AbstractHandler
     protected function finish(Request $request)
     {
         $now = Carbon::now();
-        $provision = $this->getProviderEntity();
+        $guid = $this->session->getAuthorisation()->getGuid();
+        $provision = $this->getProviderEntityByGuid($guid, $this->providerName);
+        if ($provision === false) {
+            throw new \RuntimeException('Unable to finish. Missing provider entry.');
+        }
 
         $provision->setLastseen($now);
         $provision->setLastip($request->getClientIp());
@@ -189,15 +183,14 @@ abstract class AbstractHandler
     /**
      * Handle a successful account authentication.
      *
-     * @param AccessToken $accessToken
+     * @param AccessToken            $accessToken
+     * @param ResourceOwnerInterface $resourceOwner
      *
      * @throws Ex\MissingAccountException
-     * @throws Ex\InvalidAuthorisationRequestException
      */
-    protected function handleAccountTransition(AccessToken $accessToken)
+    protected function handleAccountTransition(AccessToken $accessToken, ResourceOwnerInterface $resourceOwner)
     {
         $providerName = $this->providerManager->getProviderName();
-        $resourceOwner = $this->getResourceOwner($accessToken);
         $email = $resourceOwner->getEmail();
 
         if ((bool) $email === false) {
@@ -236,12 +229,11 @@ abstract class AbstractHandler
     {
         $providerName = $this->providerManager->getProviderName();
         $resourceOwner = $this->getResourceOwner($accessToken);
-        $this->providerEntity = $this->records->getProvisionByResourceOwnerId($providerName, $resourceOwner->getId());
 
-        if ($this->providerEntity === false) {
-            $this->setSessionNewProvider($providerName, $accessToken, $resourceOwner);
-        } else {
+        if ($this->hasProviderEntity($providerName, $resourceOwner->getId())) {
             $this->setSessionExistingProvider($providerName, $accessToken, $resourceOwner);
+        } else {
+            $this->setSessionNewProvider($providerName, $accessToken, $resourceOwner);
         }
     }
 
@@ -283,8 +275,6 @@ abstract class AbstractHandler
             ->addAccessToken($providerName, $accessToken)
             ->createAuthorisation($providerEntity->getGuid())
         ;
-
-        $this->providerEntity = $providerEntity;
     }
 
     /**
@@ -306,15 +296,21 @@ abstract class AbstractHandler
 
             return;
         }
+        $resourceOwnerId = $resourceOwner->getId();
+        $providerEntity = $this->getProviderEntityByResourceOwnerId($providerName, $resourceOwnerId);
+        if ($providerEntity === false) {
+            throw new \RuntimeException('Provider entity does not exist yet.');
+        }
+        $guid = $providerEntity->getGuid();
 
         // Existing user with a new login, and the provider exists
         $this->session
             ->addAccessToken($providerName, $accessToken)
-            ->createAuthorisation($this->getProviderEntity()->getGuid())
+            ->createAuthorisation($guid)
         ;
         $this->setDebugMessage(sprintf(
             'Creating authorisation  for GUID %s, and %s provider access token %s for ID %s',
-            $this->getProviderEntity()->getGuid(),
+            $guid,
             $providerName,
             $accessToken,
             $resourceOwner->getId()
@@ -377,7 +373,6 @@ abstract class AbstractHandler
      *                          - 'password'
      *                          - 'refresh_token'
      * @param array  $options
-     * @param string $code
      *
      * @return AccessToken
      */
@@ -416,6 +411,8 @@ abstract class AbstractHandler
      *
      * @param string        $type          Either MembersEvents::MEMBER_LOGIN' or MembersEvents::MEMBER_LOGOUT
      * @param Authorisation $authorisation
+     *
+     * @throws \Exception
      */
     protected function dispatchEvent($type, Authorisation $authorisation)
     {
@@ -425,12 +422,12 @@ abstract class AbstractHandler
 
         $event = new MembersLoginEvent();
         $event->setAccount($authorisation->getAccount());
-        
+
         try {
             $this->dispatcher->dispatch($type, $event);
         } catch (\Exception $e) {
             if ($this->config->isDebug()) {
-                dump($e);
+                throw($e);
             }
 
             $this->logger->critical('Members event dispatcher had an error', ['event' => 'exception', 'exception' => $e]);
@@ -438,18 +435,45 @@ abstract class AbstractHandler
     }
 
     /**
-     * Return the provider entity in use
+     * @param string $providerName
+     * @param string $resourceOwnerId
+     *
+     * @return Entity\Provider|false
+     */
+    protected function hasProviderEntity($providerName, $resourceOwnerId)
+    {
+        $providerEntity = $this->records->getProvisionByResourceOwnerId($providerName, $resourceOwnerId);
+
+        return $providerEntity instanceof Entity\Provider;
+    }
+
+    /**
+     * Return the provider entity.
+     *
+     * @param string $providerName
+     * @param string $resourceOwnerId
      *
      * @throws \RuntimeException
      *
      * @return Entity\Provider
      */
-    protected function getProviderEntity()
+    protected function getProviderEntityByResourceOwnerId($providerName, $resourceOwnerId)
     {
-        if ($this->providerEntity === null) {
-            throw new \RuntimeException('Provider entity not set in handler.');
-        }
+        return $this->records->getProvisionByResourceOwnerId($providerName, $resourceOwnerId);
+    }
 
-        return $this->providerEntity;
+    /**
+     * Return the provider entity.
+     *
+     * @param string $providerName
+     * @param string $guid
+     *
+     * @throws \RuntimeException
+     *
+     * @return Entity\Provider
+     */
+    protected function getProviderEntityByGuid($guid, $providerName)
+    {
+        return $this->records->getProvision($guid, $providerName);
     }
 }

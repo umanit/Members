@@ -6,7 +6,6 @@ use Bolt\Extension\Bolt\Members\Config\Config;
 use Bolt\Extension\Bolt\Members\Event\FormBuilderEvent;
 use Bolt\Extension\Bolt\Members\Form\Entity\EntityInterface;
 use Bolt\Extension\Bolt\Members\Form\Entity\Profile;
-use Pimple as Container;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Form\FormFactoryInterface;
 use Symfony\Component\Form\FormTypeInterface;
@@ -35,7 +34,6 @@ class Generator
      * Constructor.
      *
      * @param Config                   $config
-     * @param Container                $formTypes
      * @param FormFactoryInterface     $formFactory
      * @param EventDispatcherInterface $dispatcher
      */
@@ -155,39 +153,39 @@ class Generator
     {
         if ($this->formMap === null) {
             $this->formMap = [
-                MembersForms::FORM_ASSOCIATE                => [
+                MembersForms::ASSOCIATE => [
                     'form' => Builder\Associate::class,
                     'type' => Type\AssociateType::class,
                 ],
-                MembersForms::FORM_LOGIN_OAUTH              => [
+                MembersForms::LOGIN_OAUTH => [
                     'form' => Builder\LoginOauth::class,
                     'type' => Type\LoginOauthType::class,
                 ],
-                MembersForms::FORM_LOGIN_PASSWORD           => [
+                MembersForms::LOGIN_PASSWORD => [
                     'form' => Builder\LoginPassword::class,
                     'type' => Type\LoginPasswordType::class,
                 ],
-                MembersForms::FORM_LOGOUT                   => [
+                MembersForms::LOGOUT => [
                     'form' => Builder\Logout::class,
                     'type' => Type\LogoutType::class,
                 ],
-                MembersForms::FORM_PROFILE_EDIT             => [
+                MembersForms::PROFILE_EDIT => [
                     'form' => Builder\Profile::class,
                     'type' => Type\ProfileEditType::class,
                 ],
-                MembersForms::FORM_PROFILE_RECOVER_REQUEST => [
+                MembersForms::PROFILE_RECOVERY_REQUEST => [
                     'form' => Builder\ProfileRecovery::class,
                     'type' => Type\ProfileRecoveryRequestType::class,
                 ],
-                MembersForms::FORM_PROFILE_RECOVER_SUBMIT  => [
+                MembersForms::PROFILE_RECOVERY_SUBMIT => [
                     'form' => Builder\ProfileRecovery::class,
                     'type' => Type\ProfileRecoverySubmitType::class,
                 ],
-                MembersForms::FORM_PROFILE_REGISTER         => [
+                MembersForms::PROFILE_REGISTER => [
                     'form' => Builder\ProfileRegister::class,
                     'type' => Type\ProfileRegisterType::class,
                 ],
-                MembersForms::FORM_PROFILE_VIEW             => [
+                MembersForms::PROFILE_VIEW => [
                     'form' => Builder\Profile::class,
                     'type' => Type\ProfileViewType::class,
                 ],

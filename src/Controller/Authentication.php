@@ -4,6 +4,7 @@ namespace Bolt\Extension\Bolt\Members\Controller;
 
 use Bolt\Extension\Bolt\Members\AccessControl\Session;
 use Bolt\Extension\Bolt\Members\AccessControl\Validator\PasswordReset;
+use Bolt\Extension\Bolt\Members\Config\Config;
 use Bolt\Extension\Bolt\Members\Event\MembersEvents;
 use Bolt\Extension\Bolt\Members\Event\MembersExceptionEvent as ExceptionEvent;
 use Bolt\Extension\Bolt\Members\Event\MembersNotificationEvent;
@@ -17,12 +18,14 @@ use Carbon\Carbon;
 use League\OAuth2\Client\Provider\Exception\IdentityProviderException;
 use Silex\Application;
 use Silex\ControllerCollection;
+use Swift_Mime_Message as SwiftMimeMessage;
 use Symfony\Component\Form\Form;
 use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\ParameterBag;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 /**
  * Authentication controller.
@@ -140,24 +143,31 @@ class Authentication extends AbstractController
     public function login(Application $app, Request $request)
     {
         $this->assertSecure($app, $request);
+        $this->assertWPOauth($app['members.config']);
 
         $config = $this->getMembersConfig();
+        $loginRedirect = $config->getRedirectLogin();
+        $homepage = $app['url_generator']->generate('homepage');
+        $referer = $request->headers->get('referer');
 
         // Set the return redirect.
-        if ($config->getRedirectLogin()) {
-            $this->getMembersSession()
-                ->clearRedirects()
-                ->addRedirect($config->getRedirectLogin())
-            ;
-        } elseif ($request->headers->get('referer') !== $request->getUri()) {
-            $this->getMembersSession()
-                ->clearRedirects()
-                ->addRedirect($request->headers->get('referer', $app['resources']->getUrl('hosturl')))
-            ;
+        if ($request->get('redirect')) {
+            $redirect = $request->get('redirect');
+        } elseif ($loginRedirect) {
+            $redirect = $loginRedirect;
+        } elseif ($referer !== $request->getUri()) {
+            $redirect = $request->headers->get('referer');
+        } else {
+            $redirect = $homepage;
         }
+        $this->getMembersSession()
+            ->clearRedirects()
+            ->addRedirect($redirect)
+        ;
 
         $builder = $this->getMembersFormsManager()->getFormLogin($request);
-        $oauthForm = $builder->getForm(MembersForms::FORM_LOGIN_OAUTH);
+        /** @var Form $oauthForm */
+        $oauthForm = $builder->getForm(MembersForms::LOGIN_OAUTH);
         if ($oauthForm->isValid()) {
             $response = $this->processOauthForm($app, $request, $oauthForm);
             if ($response instanceof Response) {
@@ -165,7 +175,8 @@ class Authentication extends AbstractController
             }
         }
 
-        $associateForm = $builder->getForm(MembersForms::FORM_ASSOCIATE);
+        /** @var Form $associateForm */
+        $associateForm = $builder->getForm(MembersForms::ASSOCIATE);
         if ($associateForm->isValid()) {
             $response = $this->processOauthForm($app, $request, $associateForm);
             if ($response instanceof Response) {
@@ -173,7 +184,8 @@ class Authentication extends AbstractController
             }
         }
 
-        $passwordForm = $builder->getForm(MembersForms::FORM_LOGIN_PASSWORD);
+        /** @var Form $passwordForm */
+        $passwordForm = $builder->getForm(MembersForms::LOGIN_PASSWORD);
         if ($passwordForm->isValid()) {
             $this->getMembersOauthProviderManager()->setProvider($app, 'local');
 
@@ -291,7 +303,6 @@ class Authentication extends AbstractController
         }
 
         $response = new Response();
-        //$context = ['stage' => null, 'email' => null, 'link' => $app['url_generator']->generate('authenticationLogin')];
         $context = new ParameterBag(['stage' => null, 'email' => null, 'link' => $app['url_generator']->generate('authenticationLogin')]);
 
         if ($request->query->has('code')) {
@@ -319,7 +330,7 @@ class Authentication extends AbstractController
     private function resetPasswordSubmit(Application $app, Request $request, ParameterBag $context)
     {
         $builder = $this->getMembersFormsManager()->getFormProfileRecovery($request);
-        $form = $builder->getForm(MembersForms::FORM_PROFILE_RECOVER_SUBMIT);
+        $form = $builder->getForm(MembersForms::PROFILE_RECOVERY_SUBMIT);
         $context->set('stage', 'invalid');
 
         /** @var PasswordReset $passwordReset */
@@ -367,7 +378,7 @@ class Authentication extends AbstractController
     private function resetPasswordRequest(Application $app, Request $request, ParameterBag $context, Response $response)
     {
         $builder = $this->getMembersFormsManager()->getFormProfileRecovery($request);
-        $form = $builder->getForm(MembersForms::FORM_PROFILE_RECOVER_REQUEST);
+        $form = $builder->getForm(MembersForms::PROFILE_RECOVERY_REQUEST);
         $context->set('stage', 'email');
 
         if (!$form->isValid()) {
@@ -397,20 +408,18 @@ class Authentication extends AbstractController
         $mailer = $app['mailer'];
         $config = $this->getMembersConfig();
         $from = [$config->getNotificationEmail() => $config->getNotificationName()];
-        $mailHtml = $this->getResetHtml($account, $passwordReset, $app['twig'], $app['resources']->getUrl('rooturl'));
-
+        $subject = $app['twig']->render($config->getTemplate('recovery', 'subject'), ['member' => $account]);
         /** @var \Swift_Message $message */
-        $message = $mailer->createMessage('message')
-            ->setSubject($app['twig']->render($config->getTemplate('recovery', 'subject'), ['member' => $account]))
-            ->setBody(strip_tags($mailHtml))
-            ->addPart($mailHtml, 'text/html')
-        ;
+        $message = $mailer->createMessage('message');
+
         try {
             $message
+                ->setTo($email)
                 ->setFrom($from)
                 ->setReplyTo($from)
-                ->setTo($email)
+                ->setSubject($subject)
             ;
+            $this->setBody($message, $account, $passwordReset, $app['twig']);
 
             // Dispatch an event
             $event = new MembersNotificationEvent($message);
@@ -427,26 +436,38 @@ class Authentication extends AbstractController
     }
 
     /**
+     * Generate the HTML and/or text for the password reset email.
+     *
+     * @param SwiftMimeMessage       $message
      * @param Storage\Entity\Account $account
      * @param PasswordReset          $passwordReset
      * @param \Twig_Environment      $twig
-     * @param string                 $siteUrl
-     *
-     * @return string
      */
-    private function getResetHtml(Storage\Entity\Account $account, PasswordReset $passwordReset, \Twig_Environment $twig, $siteUrl)
+    private function setBody(SwiftMimeMessage $message, Storage\Entity\Account $account, PasswordReset $passwordReset, \Twig_Environment $twig)
     {
-        $config = $this->getMembersConfig();
-        $query = http_build_query(['code' => $passwordReset->getQueryCode()]);
+        $app = $this->getContainer();
+        $query = [
+            'code' => $passwordReset->getQueryCode(),
+        ];
+        $link = $app['url_generator']->generate('authenticationPasswordReset', $query, UrlGeneratorInterface::ABSOLUTE_URL);
         $context = [
             'name'   => $account->getDisplayname(),
             'email'  => $account->getEmail(),
-            'link'   => sprintf('%s%s/reset?%s', $siteUrl, $config->getUrlAuthenticate(), $query),
+            'link'   => $link,
             'member' => $account,
         ];
-        $mailHtml = $twig->render($config->getTemplate('recovery', 'body'), $context);
 
-        return $mailHtml;
+        $config = $this->getMembersConfig();
+        $template = $config->getTemplate('recovery', 'text');
+        $bodyText = $twig->render($template, $context);
+        $message->setBody($bodyText);
+
+        if ($config->getNotificationEmailFormat() !== 'text') {
+            $template = $config->getTemplate('recovery', 'html');
+            $bodyHtml = $twig->render($template, $context);
+            /** @var \Swift_Message $message */
+            $message->addPart($bodyHtml, 'text/html');
+        }
     }
 
     /**
@@ -564,5 +585,23 @@ class Authentication extends AbstractController
         $this->getMembersFeedback()->debug($msg);
 
         return false;
+    }
+
+    /**
+     * Remind people how stupid they are to use WP-OAuth!
+     *
+     * @param Config $config
+     */
+    private function assertWPOauth(Config $config)
+    {
+        if (!$config->hasProvider('wpoauth')) {
+            return;
+        }
+
+        $provider = $config->getProvider('wpoauth');
+        if ($provider->isEnabled()) {
+            $msg = sprintf('One of the configured OAuth providers, "%s", uses WP-OAuth. WP-Oauth is unsafe and insecure. Choosing another provider would be very sensible!', $provider->getLabelSignIn());
+            $this->getMembersFeedback()->debug($msg);
+        }
     }
 }

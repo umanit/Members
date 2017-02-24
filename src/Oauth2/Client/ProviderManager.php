@@ -9,6 +9,7 @@ use GuzzleHttp\Client;
 use League\OAuth2\Client\Provider\AbstractProvider;
 use Psr\Log\LoggerInterface;
 use Silex\Application;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 /**
  * Provider object management class.
@@ -28,7 +29,7 @@ class ProviderManager
     /** @var \Psr\Log\LoggerInterface */
     protected $logger;
     /** @var string */
-    protected $rootUrl;
+    protected $urlGenerator;
     /** @var AbstractProvider */
     protected $provider;
     /** @var string */
@@ -39,17 +40,17 @@ class ProviderManager
     /**
      * Constructor.
      *
-     * @param Config          $config
-     * @param Client          $guzzleClient
-     * @param LoggerInterface $logger
-     * @param string          $rootUrl
+     * @param Config                $config
+     * @param Client                $guzzleClient
+     * @param LoggerInterface       $logger
+     * @param UrlGeneratorInterface $urlGenerator
      */
-    public function __construct(Config $config, Client $guzzleClient, LoggerInterface $logger, $rootUrl)
+    public function __construct(Config $config, Client $guzzleClient, LoggerInterface $logger, UrlGeneratorInterface $urlGenerator)
     {
         $this->config = $config;
         $this->guzzleClient = $guzzleClient;
         $this->logger = $logger;
-        $this->rootUrl = $rootUrl;
+        $this->urlGenerator = $urlGenerator;
     }
 
     /**
@@ -155,7 +156,7 @@ class ProviderManager
         if (empty($providerConfig->getClientSecret())) {
             throw new Exception\ConfigurationException('Provider secret key required: ' . $providerName);
         }
-        if (empty($providerConfig->getScopes())) {
+        if (empty($providerConfig->getScopes()) && $providerName !== 'wpoauth') {
             throw new Exception\ConfigurationException('Provider scope(s) required: ' . $providerName);
         }
 
@@ -164,7 +165,8 @@ class ProviderManager
             'clientSecret' => $providerConfig->getClientSecret(),
             'scope'        => $providerConfig->getScopes(),
             'redirectUri'  => $this->getCallbackUrl($providerName),
-        ];
+        ] + $providerConfig->getOptions();
+
         if ($providerName === 'facebook') {
             $options['graphApiVersion'] = 'v2.5';
         }
@@ -249,7 +251,7 @@ class ProviderManager
      */
     protected function getCallbackUrl($providerName)
     {
-        $url = sprintf('%s/%s/oauth2/callback?provider=%s', $this->rootUrl, $this->config->getUrlAuthenticate(), $providerName);
+        $url = $this->urlGenerator->generate('authenticationCallback', ['provider' => $providerName], UrlGeneratorInterface::ABSOLUTE_URL);
         $this->logger->debug("[Members][Provider]: Setting callback URL: $url");
 
         return $url;

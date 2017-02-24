@@ -4,6 +4,7 @@ namespace Bolt\Extension\Bolt\Members;
 
 use Bolt\Events\ControllerEvents;
 use Bolt\Extension\AbstractExtension;
+use Bolt\Extension\Bolt\Members\AccessControl\SessionSubscriber;
 use Bolt\Extension\Bolt\Members\Provider\MembersServiceProvider;
 use Bolt\Extension\Bolt\Members\Storage\Entity;
 use Bolt\Extension\Bolt\Members\Storage\Repository;
@@ -69,8 +70,8 @@ class MembersExtension extends AbstractExtension implements ServiceProviderInter
         $app = $this->getContainer();
         $dispatcher->addSubscriber($this);
         $dispatcher->addSubscriber($app['members.admin']);
-        $dispatcher->addSubscriber($app['members.session']);
-        $dispatcher->addSubscriber($app['members.listener.profile']);
+        $dispatcher->addSubscriber(new SessionSubscriber($app));
+        $dispatcher->addSubscriber(new EventListener\ProfileListener($app));
     }
 
     /**

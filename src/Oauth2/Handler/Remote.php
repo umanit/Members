@@ -5,6 +5,7 @@ namespace Bolt\Extension\Bolt\Members\Oauth2\Handler;
 use Bolt\Extension\Bolt\Members\AccessControl\Session;
 use Bolt\Extension\Bolt\Members\Event\MembersEvents;
 use Bolt\Extension\Bolt\Members\Exception\DisabledAccountException;
+use Bolt\Extension\Bolt\Members\Exception\MissingAccountException;
 use Bolt\Extension\Bolt\Members\Oauth2\Client\Provider\ResourceOwnerInterface;
 use Bolt\Extension\Bolt\Members\Storage\Entity;
 use League\OAuth2\Client\Provider\Exception\IdentityProviderException;
@@ -69,14 +70,68 @@ class Remote extends AbstractHandler
         $this->session->checkStateToken($request);
 
         try {
+            $this->preProcess($request, $grantType);
             parent::process($request, $grantType);
-            $this->finish($request);
         } catch (DisabledAccountException $ex) {
             $this->session->addRedirect($this->urlGenerator->generate('authenticationLogin'));
             if ($this->session->getAuthorisation()) {
                 $this->dispatchEvent(MembersEvents::MEMBER_LOGIN_FAILED_ACCOUNT_DISABLED, $this->session->getAuthorisation());
             }
+            $this->feedback->debug(sprintf('Login failed: %s', $ex->getMessage()));
+
+            return;
+        } catch (MissingAccountException $e) {
+            $this->feedback->debug('No registered account found, redirecting');
+
+            throw $e;
         }
+
+        $this->finish($request);
+
+        return;
+    }
+
+    /**
+     * @param Request $request
+     * @param string  $grantType
+     *
+     * @throws DisabledAccountException
+     * @throws MissingAccountException
+     */
+    protected function preProcess(Request $request, $grantType)
+    {
+        $code = $request->query->get('code');
+        $options = ['code' => $code];
+        $isAuto = $this->config->isRegistrationAutomatic();
+        $hasAuth = $this->session->hasAuthorisation();
+
+        try {
+            $accessToken = $this->getAccessToken($grantType, $options);
+            $resourceOwner = $this->getResourceOwner($accessToken);
+
+            $this->session->setAttribute(Session::SESSION_ATTRIBUTE_OAUTH_DATA, [
+                'providerName'  => $this->providerName,
+                'accessToken'   => $accessToken,
+                'resourceOwner' => $resourceOwner,
+            ]);
+        } catch (\RuntimeException $e) {
+            throw new DisabledAccountException('Exception encountered getting resource owner', $e->getCode(), $e);
+        }
+        $providerEntity = $this->getProviderEntityByResourceOwnerId($this->providerName, $resourceOwner->getId());
+
+        if ($providerEntity || $isAuto || $hasAuth) {
+            $this->setSession($accessToken);
+
+            if ($this->session->isTransitional()) {
+                $this->handleAccountTransition($accessToken, $resourceOwner);
+            }
+
+            return;
+        }
+        $redirect = $this->urlGenerator->generate('membersProfileRegister');
+        $this->session->addRedirect($redirect);
+
+        throw new MissingAccountException();
     }
 
     /**
@@ -105,35 +160,6 @@ class Remote extends AbstractHandler
     public function logout(Request $request)
     {
         parent::logout($request);
-    }
-
-    protected function getOauthResourceOwner(Request $request)
-    {
-        //if ($cookie = $request->cookies->get(Types::TOKEN_COOKIE_NAME)) {
-        //    $profile = $this->records->getTokensByCookie($cookie);
-        //
-        //    if (!$profile) {
-        //        throw new Exception\AccessDeniedException('No matching profile found.');
-        //    } elseif (!$profile['enabled']) {
-        //        throw new Exception\AccessDeniedException('Profile disabled.');
-        //    }
-        //
-        //    // Compile the options from the database record.
-        //    $options = [
-        //        'resource_owner_id' => $profile->getResourceOwnerId(),
-        //        'refresh_token'     => $profile->getRefreshToken(),
-        //        'access_token'      => $profile->getAccessToken(),
-        //        'expires'           => $profile->getExpires(),
-        //    ];
-        //
-        //    // Create and refresh the token
-        //    $accessToken = $this->getRefreshToken(new AccessToken($options));
-        //    $resourceOwner = $this->provider->getResourceOwner($accessToken);
-        //
-        //    // Save the new token data
-        //    $providerName = $this->providerManager->getProviderName();
-        //    $this->records->saveToken($profile);
-        //}
     }
 
     /**
