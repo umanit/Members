@@ -45,8 +45,11 @@
         <div class="small-12 columns">
 
             {% for provider in providers|keys %}
-                {% if provider != 'local' %}
-                    {{ form_row(form_associate[provider]) }}
+                {% if provider != 'local' and provider not in member_providers() %}
+                {% if loop.first %}<h5>{{ __('Add Social Media Account') }}</h5>{% endif %}
+                    {{ form_start(form_associate) }}
+                        {{ form_row(form_associate[provider]) }}
+                    {{ form_end(form_associate) }}
                 {% endif %}
             {% endfor %}
 
